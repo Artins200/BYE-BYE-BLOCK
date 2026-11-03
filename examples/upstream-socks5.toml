@@ -1,0 +1,20 @@
+# Пример: внешний туннель уже поднят локально (sing-box/xray/ssh -D и т.п.).
+# BYE-BYE-BLOCK не создаёт VPN-сервер и не обещает обход IP-блоков без туннеля.
+[proxy]
+host = "127.0.0.1"
+port = 8844
+
+[upstream]
+mode = "socks5"
+host = "127.0.0.1"
+port = 1080
+remote_dns = true
+# username = "user"
+# password = "pass"
+
+[strategy]
+mode = "auto"
+order = ["direct"]
+
+[dns]
+mode = "system"

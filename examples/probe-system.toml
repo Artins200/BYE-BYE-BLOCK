@@ -1,0 +1,4 @@
+[dns]
+mode = "system"
+[dashboard]
+enabled = false
