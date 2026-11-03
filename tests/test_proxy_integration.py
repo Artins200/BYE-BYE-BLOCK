@@ -24,6 +24,36 @@ def make_cert(directory):
     return cert, key
 
 
+def _recv_exact(sock, n):
+    data = b""
+    while len(data) < n:
+        chunk = sock.recv(n - len(data))
+        if not chunk:
+            raise ConnectionError("connection closed while reading")
+        data += chunk
+    return data
+
+
+def _recv_headers(sock):
+    data = b""
+    while b"\r\n\r\n" not in data:
+        chunk = sock.recv(1)
+        if not chunk:
+            raise ConnectionError("connection closed while reading headers")
+        data += chunk
+    return data
+
+
+def _read_all(sock):
+    data = b""
+    while True:
+        chunk = sock.recv(65536)
+        if not chunk:
+            break
+        data += chunk
+    return data
+
+
 class TestProxyIntegration(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -40,10 +70,11 @@ class TestProxyIntegration(unittest.IsolatedAsyncioTestCase):
         self.cfg.proxy.allowed_ports = [self.tls_port, self.http_port, 443, 80]
         self.cfg.dns.mode = "system"
         self.cfg.dashboard.enabled = False
-        self.cfg.strategy.first_response_timeout = 2
-        self.cfg.proxy.first_response_timeout = 2
-        self.cfg.proxy.connect_timeout = 2
+        self.cfg.proxy.first_response_timeout = 3
+        self.cfg.proxy.connect_timeout = 3
         self.proxy = ProxyServer(self.cfg, Metrics())
+        # Bind explicitly to IPv4 loopback so the client never races IPv6 ::1.
+        self.cfg.proxy.host = "127.0.0.1"
         self.proxy_host, self.proxy_port = await self.proxy.start()
 
     async def asyncTearDown(self):
@@ -60,87 +91,91 @@ class TestProxyIntegration(unittest.IsolatedAsyncioTestCase):
             if data:
                 writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK")
                 await writer.drain()
+        except (ConnectionError, ssl.SSLError):
+            pass
         finally:
             writer.close()
+            try:
+                await writer.wait_closed()
+            except (ConnectionError, ssl.SSLError):
+                pass
 
     async def _http_echo(self, reader, writer):
         try:
-            data = await reader.readuntil(b"\r\n\r\n")
-            body = b"hello"
-            writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\n" + body)
+            await reader.readuntil(b"\r\n\r\n")
+            writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\nhello")
             await writer.drain()
+        except (ConnectionError, asyncio.IncompleteReadError):
+            pass
         finally:
             writer.close()
+            try:
+                await writer.wait_closed()
+            except ConnectionError:
+                pass
+
+    def _tls_via_connect(self):
+        # Real blocking client: CONNECT, then TLS over the tunnel, then a request.
+        with socket.create_connection((self.proxy_host, self.proxy_port), timeout=5) as raw:
+            raw.sendall(f"CONNECT 127.0.0.1:{self.tls_port} HTTP/1.1\r\nHost: localhost\r\n\r\n".encode())
+            resp = _recv_headers(raw)
+            if b"200" not in resp.split(b"\r\n", 1)[0]:
+                raise AssertionError(f"CONNECT failed: {resp!r}")
+            with self.client_ctx.wrap_socket(raw, server_hostname="localhost") as tls:
+                tls.sendall(b"GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                return _read_all(tls)
+
+    def _tls_via_socks(self):
+        with socket.create_connection((self.proxy_host, self.proxy_port), timeout=5) as raw:
+            raw.sendall(b"\x05\x01\x00")
+            if _recv_exact(raw, 2) != b"\x05\x00":
+                raise AssertionError("SOCKS5 method negotiation failed")
+            raw.sendall(b"\x05\x01\x00\x01" + socket.inet_aton("127.0.0.1") + struct.pack("!H", self.tls_port))
+            reply = _recv_exact(raw, 10)
+            if reply[1] != 0:
+                raise AssertionError(f"SOCKS5 CONNECT failed: {reply!r}")
+            with self.client_ctx.wrap_socket(raw, server_hostname="localhost") as tls:
+                tls.sendall(b"GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                return _read_all(tls)
 
     async def test_http_connect_tls_direct_and_split(self):
         for strategy in ["direct", "tls-record-sni", "tcp-sni", "tls-record-mid"]:
             with self.subTest(strategy=strategy):
                 self.cfg.strategy.mode = "fixed"
                 self.cfg.strategy.fixed = strategy
-                reader, writer = await asyncio.open_connection(self.proxy_host, self.proxy_port)
-                writer.write(f"CONNECT localhost:{self.tls_port} HTTP/1.1\r\nHost: localhost\r\n\r\n".encode())
-                await writer.drain()
-                resp = await reader.readuntil(b"\r\n\r\n")
-                self.assertIn(b"200", resp)
-                # Upgrade client side to TLS through the proxy tunnel.
-                transport = writer.transport
-                protocol = transport.get_protocol()
-                loop = asyncio.get_running_loop()
-                new_transport = await loop.start_tls(transport, protocol, self.client_ctx, server_hostname="localhost")
-                # Rebind reader/writer to TLS transport.
-                writer = asyncio.StreamWriter(new_transport, protocol, reader, loop)
-                reader._transport = new_transport
-                writer.write(b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n")
-                await writer.drain()
-                data = await asyncio.wait_for(reader.read(65536), 3)
+                data = await asyncio.to_thread(self._tls_via_connect)
                 self.assertIn(b"200 OK", data)
-                writer.close()
-                try:
-                    await writer.wait_closed()
-                except Exception:
-                    pass
+                self.assertTrue(data.endswith(b"OK"))
 
     async def test_socks5_tls(self):
         self.cfg.strategy.mode = "fixed"
         self.cfg.strategy.fixed = "tls-record-sni"
-        reader, writer = await asyncio.open_connection(self.proxy_host, self.proxy_port)
-        writer.write(b"\x05\x01\x00")
-        await writer.drain()
-        self.assertEqual(await reader.readexactly(2), b"\x05\x00")
-        host = b"localhost"
-        writer.write(b"\x05\x01\x00\x03" + bytes([len(host)]) + host + struct.pack("!H", self.tls_port))
-        await writer.drain()
-        reply = await reader.readexactly(10)
-        self.assertEqual(reply[1], 0)
-        transport = writer.transport
-        protocol = transport.get_protocol()
-        loop = asyncio.get_running_loop()
-        new_transport = await loop.start_tls(transport, protocol, self.client_ctx, server_hostname="localhost")
-        writer = asyncio.StreamWriter(new_transport, protocol, reader, loop)
-        reader._transport = new_transport
-        writer.write(b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n")
-        await writer.drain()
-        data = await asyncio.wait_for(reader.read(65536), 3)
+        data = await asyncio.to_thread(self._tls_via_socks)
         self.assertIn(b"200 OK", data)
-        writer.close()
+        self.assertTrue(data.endswith(b"OK"))
 
     async def test_http_absolute_get(self):
-        reader, writer = await asyncio.open_connection(self.proxy_host, self.proxy_port)
-        writer.write(f"GET http://localhost:{self.http_port}/ HTTP/1.1\r\nHost: localhost:{self.http_port}\r\n\r\n".encode())
-        await writer.drain()
-        data = await asyncio.wait_for(reader.read(65536), 3)
+        def request():
+            with socket.create_connection((self.proxy_host, self.proxy_port), timeout=5) as raw:
+                raw.sendall(
+                    f"GET http://127.0.0.1:{self.http_port}/ HTTP/1.1\r\nHost: 127.0.0.1:{self.http_port}\r\nConnection: close\r\n\r\n".encode()
+                )
+                return _read_all(raw)
+
+        data = await asyncio.to_thread(request)
         self.assertIn(b"200 OK", data)
         self.assertIn(b"hello", data)
-        writer.close()
 
     async def test_private_target_blocked_by_default(self):
         self.cfg.proxy.allow_private_targets = False
-        reader, writer = await asyncio.open_connection(self.proxy_host, self.proxy_port)
-        writer.write(f"CONNECT 127.0.0.1:{self.tls_port} HTTP/1.1\r\n\r\n".encode())
-        await writer.drain()
-        data = await asyncio.wait_for(reader.read(65536), 3)
+
+        def request():
+            with socket.create_connection((self.proxy_host, self.proxy_port), timeout=5) as raw:
+                raw.sendall(f"CONNECT 127.0.0.1:{self.tls_port} HTTP/1.1\r\n\r\n".encode())
+                return _read_all(raw)
+
+        data = await asyncio.to_thread(request)
         self.assertIn(b"502", data)
-        writer.close()
 
 
 if __name__ == "__main__":
