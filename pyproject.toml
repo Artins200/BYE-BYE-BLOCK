@@ -4,13 +4,16 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "byebyeblock"
-version = "0.1.0"
+version = "0.2.0"
 description = "Adaptive local anti-censorship proxy with diagnostics, DoH and tunnel fallback"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [{name = "BYE-BYE-BLOCK contributors"}]
 dependencies = []
+
+[project.optional-dependencies]
+build = ["pyinstaller>=6.0"]
 
 [project.scripts]
 bbb = "byebyeblock.cli:main"

@@ -97,9 +97,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Bootstrap and start BYE-BYE-BLOCK")
     parser.add_argument("--setup-only", action="store_true", help="Prepare .venv and run doctor, then exit")
     parser.add_argument("--reinstall", action="store_true", help="Force reinstall into .venv")
-    parser.add_argument("--no-browser", action="store_true", help="Do not open the dashboard in a browser")
+    parser.add_argument("--console", action="store_true", help="Run the console proxy instead of the desktop window")
+    parser.add_argument("--no-browser", action="store_true", help="Console mode only: do not open a browser dashboard")
     # parse_known_args lets users forward native CLI flags, e.g.
-    # start.bat --no-browser --config examples/config.toml --port 9000
+    # start.bat --console --config examples/config.toml --port 9000
     args, app_args = parser.parse_known_args(argv)
 
     if sys.version_info < (3, 11):
@@ -116,11 +117,16 @@ def main(argv: list[str] | None = None) -> int:
         if args.setup_only:
             print("Setup complete. Start normally with start.bat (or bbb run).", flush=True)
             return 0
-        cmd: list[str | Path] = [py, "-m", "byebyeblock", "run"]
-        if not args.no_browser:
-            cmd.append("--open-browser")
+        if args.console:
+            cmd: list[str | Path] = [py, "-m", "byebyeblock", "run"]
+            if not args.no_browser:
+                cmd.append("--open-browser")
+            cmd.extend(app_args)
+            print("Starting console proxy. Keep this window open; press Ctrl+C to stop.", flush=True)
+            return run(cmd)
+        cmd = [py, "-m", "byebyeblock", "gui"]
         cmd.extend(app_args)
-        print("Starting proxy. Keep this window open; press Ctrl+C to stop.", flush=True)
+        print("Starting BYE-BYE-BLOCK desktop window...", flush=True)
         return run(cmd)
     except KeyboardInterrupt:
         return 130

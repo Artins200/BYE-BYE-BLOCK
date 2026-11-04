@@ -8,6 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
+from . import __version__
 from .config import Config
 from .metrics import Metrics
 
@@ -40,7 +41,7 @@ def demo_metrics() -> Metrics:
 
 
 class DashboardHandler(BaseHTTPRequestHandler):
-    server_version = "BBB-Dashboard/0.1"
+    server_version = "BBB-Dashboard/0.2"
     metrics: Metrics
     config: Config
     demo: bool = False
@@ -68,7 +69,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if path == "/api/status":
             data = self.metrics.snapshot()
             data["demo"] = self.demo
-            data["version"] = "0.1.0"
+            data["version"] = __version__
             data["proxy"] = {"host": self.config.proxy.host, "port": self.config.proxy.port}
             data["upstream"] = self.config.upstream.mode
             data["dns"] = self.config.dns.mode

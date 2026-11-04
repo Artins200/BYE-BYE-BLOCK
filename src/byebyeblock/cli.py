@@ -47,6 +47,10 @@ def build_parser() -> argparse.ArgumentParser:
     dash.add_argument("--port", type=int, default=8787)
     dash.add_argument("--demo", action="store_true", help="Synthetic data; may bind publicly for preview")
 
+    gui = sub.add_parser("gui", help="Start the desktop window (no browser)")
+    gui.add_argument("--config", type=Path)
+    gui.add_argument("--smoke", action="store_true", help="Open the window briefly and exit (CI)")
+
     sub.add_parser("config-example", help="Print example TOML config")
     sub.add_parser("strategies", help="List supported strategies")
     return p
@@ -203,6 +207,9 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_doctor(args)
         if args.command == "dashboard":
             return cmd_dashboard(args)
+        if args.command == "gui":
+            from .gui import main as gui_main
+            return gui_main(config_path=args.config, smoke=args.smoke)
         if args.command == "config-example":
             print(example_config())
             return 0

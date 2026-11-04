@@ -1,4 +1,5 @@
 import asyncio
+import shutil
 import socket
 import ssl
 import struct
@@ -13,6 +14,8 @@ from byebyeblock.proxy import ProxyServer
 
 
 def make_cert(directory):
+    if shutil.which("openssl") is None:
+        raise unittest.SkipTest("openssl is required for TLS integration tests")
     cert = Path(directory) / "cert.pem"
     key = Path(directory) / "key.pem"
     subprocess.run([
