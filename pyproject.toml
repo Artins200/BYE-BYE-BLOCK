@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "byebyeblock"
+version = "0.2.0"
+description = "Adaptive local anti-censorship proxy with diagnostics, DoH and tunnel fallback"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [{name = "BYE-BYE-BLOCK contributors"}]
+dependencies = []
+
+[project.optional-dependencies]
+build = ["pyinstaller>=6.0"]
+
+[project.scripts]
+bbb = "byebyeblock.cli:main"
+bye-bye-block = "byebyeblock.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+byebyeblock = ["static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

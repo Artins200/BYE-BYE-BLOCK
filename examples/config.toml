@@ -1,0 +1,30 @@
+# Скопируйте в config.local.toml и отредактируйте.
+[proxy]
+host = "127.0.0.1"
+port = 8844
+allowed_ports = [80, 443, 8080, 8443]
+allow_private_targets = false
+
+[dns]
+mode = "doh"
+providers = ["https://cloudflare-dns.com/dns-query", "https://dns.google/resolve"]
+fallback_system = true
+
+[strategy]
+mode = "auto"
+order = ["direct", "tls-record-sni", "tcp-sni", "http-host-split"]
+segment_delay_ms = 8
+tls_retry = true
+
+[upstream]
+mode = "none"
+
+[dashboard]
+enabled = true
+host = "127.0.0.1"
+port = 8787
+redact_domains = true
+
+domains = []
+bypass = []
+log_domains = false

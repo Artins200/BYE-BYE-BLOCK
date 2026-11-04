@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BYE-BYE-BLOCK · Панель</title>
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+</head>
+<body>
+<div class="bg"></div>
+<header>
+  <div class="brand"><img src="/logo.svg" alt=""><div><h1>BYE-BYE-BLOCK</h1><p>адаптивный локальный прокси · диагностика · без отключения TLS</p></div></div>
+  <div class="header-right"><span id="demo" class="badge hidden">DEMO</span><span id="status" class="badge ok">подключение…</span></div>
+</header>
+<main>
+  <section class="hero card">
+    <div>
+      <h2>Не «обходит всё», а подбирает то, что работает в вашей сети</h2>
+      <p>DNS → TCP → TLS → стратегия → кеш успеха. Если блокировка по IP или whitelist — нужен внешний туннель, а не магия фрагментации.</p>
+    </div>
+    <div class="hero-actions">
+      <code id="proxy-addr">127.0.0.1:8844</code>
+      <button id="copy" class="btn">Скопировать адрес</button>
+    </div>
+  </section>
+  <section class="grid stats">
+    <div class="card stat"><span>Соединения</span><strong id="connections">—</strong><small id="active">— активных</small></div>
+    <div class="card stat"><span>Успешно</span><strong id="successes">—</strong><small id="rate">—</small></div>
+    <div class="card stat"><span>Ошибки</span><strong id="failures">—</strong><small id="top-error">—</small></div>
+    <div class="card stat"><span>Трафик</span><strong id="traffic">—</strong><small id="traffic-split">—</small></div>
+  </section>
+  <section class="grid two">
+    <div class="card">
+      <h3>Стратегии</h3>
+      <div id="strategies" class="bars"></div>
+      <p class="muted">Кеш выбирает последнюю успешную стратегию для пары хост:порт. Неудачные уходят в cooldown.</p>
+    </div>
+    <div class="card">
+      <h3>Конфигурация</h3>
+      <dl id="config" class="kv"></dl>
+      <h3>Проверка сети</h3>
+      <pre class="cmd">bbb probe example.com --port 443
+bbb probe example.com --json --output reports/example.json</pre>
+    </div>
+  </section>
+  <section class="card">
+    <div class="row"><h3>Последние события</h3><label class="toggle"><input type="checkbox" id="autorefresh" checked> автообновление</label></div>
+    <div class="table-wrap"><table><thead><tr><th>Время</th><th>Событие</th><th>Хост</th><th>Стратегия</th><th>Причина</th></tr></thead><tbody id="events"></tbody></table></div>
+  </section>
+  <section class="grid three">
+    <div class="card mini"><h3>DNS</h3><p>DoH с проверкой сертификата и системным fallback. Different CDN answers ≠ автоматически отравление.</p></div>
+    <div class="card mini"><h3>TLS</h3><p>ClientHello делится на записи/сегменты. Сертификаты проверяет браузер end-to-end; прокси не MITM.</p></div>
+    <div class="card mini"><h3>Границы</h3><p>Нет UDP/QUIC, kernel fake/TTL и обхода физического отключения. Для IP-блоков подключите SOCKS5-туннель.</p></div>
+  </section>
+</main>
+<footer>BYE-BYE-BLOCK · read-only панель · без телеметрии · <span id="uptime"></span></footer>
+<script src="/app.js"></script>
+</body>
+</html>

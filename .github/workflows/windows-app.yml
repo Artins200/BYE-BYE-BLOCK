@@ -1,0 +1,44 @@
+name: windows-app
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -e ".[build]"
+      - run: python -m unittest discover -s tests -v
+      - name: GUI smoke test
+        run: python -m byebyeblock gui --smoke
+      - name: Build executable
+        run: >
+          pyinstaller --noconfirm --clean --onefile --windowed
+          --name BYE-BYE-BLOCK
+          --icon assets/icon.ico
+          --add-data "assets/icon.png;assets"
+          --collect-submodules byebyeblock
+          desktop.py
+      - name: Executable selftest
+        run: .\dist\BYE-BYE-BLOCK.exe --selftest
+      - uses: actions/upload-artifact@v7
+        with:
+          name: BYE-BYE-BLOCK-windows-x64
+          path: dist/BYE-BYE-BLOCK.exe
+          if-no-files-found: error
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v3
+        with:
+          files: dist/BYE-BYE-BLOCK.exe

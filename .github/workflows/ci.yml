@@ -1,0 +1,35 @@
+name: ci
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install -e .
+      - run: python -m unittest discover -s tests -v
+      - run: bbb doctor
+      - run: bbb strategies
+
+  windows-launcher:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Exercise start.bat bootstrap
+        shell: cmd
+        run: |
+          set BBB_NO_PAUSE=1
+          call start.bat --setup-only
+          if errorlevel 1 exit /b 1
+          .venv\Scripts\bbb.exe doctor
+          .venv\Scripts\bbb.exe gui --smoke
