@@ -25,6 +25,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--host", default=None)
     run.add_argument("--port", type=int, default=None)
     run.add_argument("--no-dashboard", action="store_true")
+    run.add_argument("--open-browser", action="store_true", help="Open the local dashboard after startup")
     run.add_argument("--verbose", action="store_true")
 
     probe = sub.add_parser("probe", help="Diagnose DNS/TCP/TLS and compare strategies")
@@ -118,7 +119,11 @@ async def cmd_run(args) -> int:
     if cfg.dashboard.enabled and not args.no_dashboard:
         from .dashboard import serve_dashboard_thread
         dash_thread = serve_dashboard_thread(cfg.dashboard.host, cfg.dashboard.port, metrics, cfg, demo=False)
-        print(f"Dashboard: http://{cfg.dashboard.host}:{cfg.dashboard.port}")
+        dashboard_url = f"http://{cfg.dashboard.host}:{cfg.dashboard.port}"
+        print(f"Dashboard: {dashboard_url}")
+        if args.open_browser:
+            import webbrowser
+            webbrowser.open(dashboard_url)
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):

@@ -31,6 +31,26 @@
 
 ## Быстрый старт
 
+### Windows: в два клика
+
+1. Установите Python 3.11+ с <https://www.python.org/downloads/windows/> и включите **Add python.exe to PATH**.
+2. Скачайте/распакуйте репозиторий и запустите `start.bat`.
+
+`start.bat` сам создаст `.venv`, установит проект, выполнит `doctor`, запустит прокси и откроет панель. Права администратора не нужны. Системные настройки прокси скрипт **не меняет** — после запуска укажите браузеру `127.0.0.1:8844` вручную.
+
+Полезные варианты:
+
+```bat
+start.bat --no-browser
+start.bat --config examples\config.toml
+start.bat --setup-only
+start.bat --reinstall
+```
+
+Остановка: `Ctrl+C` в окне запуска или закрытие окна.
+
+### Вручную / Linux / macOS
+
 ```bash
 python -m venv .venv
 source .venv/bin/activate      # Windows: .venv\Scripts\activate
